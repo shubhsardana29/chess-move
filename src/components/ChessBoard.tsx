@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, RefreshCw, ZapOff } from 'lucide-react';
+import {  RefreshCw, ZapOff } from 'lucide-react';
 
 interface ChessBoardProps {
   isConnected: boolean;

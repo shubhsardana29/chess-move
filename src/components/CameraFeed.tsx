@@ -14,7 +14,7 @@ export const CameraFeed: React.FC<CameraFeedProps> = ({ onFrame, isConnected }) 
     if (webcamRef.current && isConnected) {
       const imageSrc = webcamRef.current.getScreenshot();
       if (imageSrc) {
-        // Remove data:image/jpeg;base64, prefix
+        // Extract base64 data from image
         const base64Data = imageSrc.split(',')[1];
         onFrame(base64Data);
       }

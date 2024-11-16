@@ -17,17 +17,24 @@ function App() {
   const [previousPieces, setPreviousPieces] = useState<DetectedPiece[]>([]);
   const speechManager = SpeechManager.getInstance();
 
+  // Retry attempt count for WebSocket
+  const [retryCount, setRetryCount] = useState(0);
+
+  // Enhanced WebSocket connection with exponential backoff
   const connectWebSocket = useCallback(() => {
     const socket = new WebSocket('ws://localhost:8000/ws');
-    
+
     socket.onopen = () => {
       setIsConnected(true);
+      setRetryCount(0); // Reset retry count on successful connection
       speechManager.speak("Connected to chess vision system");
     };
 
     socket.onclose = () => {
       setIsConnected(false);
-      setTimeout(connectWebSocket, 3000);
+      const retryDelay = Math.min(3000 * (retryCount + 1), 30000); // Exponential backoff up to 30s
+      setTimeout(connectWebSocket, retryDelay);
+      setRetryCount((count) => count + 1);
       speechManager.speak("Connection lost. Attempting to reconnect");
     };
 
@@ -41,23 +48,38 @@ function App() {
     return () => {
       socket.close();
     };
-  }, []);
+  }, [retryCount]);
 
   useEffect(() => {
     connectWebSocket();
   }, [connectWebSocket]);
 
+  // Debounce function to limit announcement frequency
+  const debounce = (func: () => void, delay: number) => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    return () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => func(), delay);
+    };
+  };
+
+  const announceMove = useCallback(
+    debounce(() => {
+      detectedPieces.forEach((piece) => {
+        const prevPiece = previousPieces.find((p) => p.piece === piece.piece);
+        if (prevPiece && prevPiece.position !== piece.position) {
+          const moveText = `${piece.piece} moved from ${prevPiece.position} to ${piece.position}`;
+          speechManager.speak(moveText);
+        }
+      });
+      setPreviousPieces(detectedPieces);
+    }, 1000),
+    [detectedPieces, previousPieces]
+  );
+
   useEffect(() => {
-    // Compare previous and current pieces to announce moves
-    detectedPieces.forEach(piece => {
-      const prevPiece = previousPieces.find(p => p.piece === piece.piece);
-      if (prevPiece && prevPiece.position !== piece.position) {
-        const moveText = `${piece.piece} moved from ${prevPiece.position} to ${piece.position}`;
-        speechManager.speak(moveText);
-      }
-    });
-    setPreviousPieces(detectedPieces);
-  }, [detectedPieces]);
+    announceMove();
+  }, [detectedPieces, announceMove]);
 
   const handleFrame = (frameData: string) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -77,7 +99,7 @@ function App() {
               </h1>
             </div>
             <a
-              href="https://github.com"
+              href="https://github.com/shubhsardana29/slidely"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-500 hover:text-gray-700"
